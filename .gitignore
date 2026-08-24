@@ -1,0 +1,20 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local, machine-specific Claude Code state
+.claude/settings.local.json
+.claude/.local/
+
+# Build artefacts — the plugin is the repository, not a zip of it
+*.zip
+
+# Node (the hooks have no dependencies; this is for consumers of the pack)
+node_modules/
+npm-debug.log*
+*.log
