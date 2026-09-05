@@ -1,0 +1,19 @@
+{
+  "name": "claude-code-payment-skills",
+  "description": "Review skills for backends where a silent defect costs money.",
+  "owner": {
+    "name": "Aubin Haba",
+    "url": "https://github.com/aubinhaba"
+  },
+  "plugins": [
+    {
+      "name": "payment-grade",
+      "source": "./",
+      "description": "PCI scope, distributed consistency, boundaries, test strength, AWS change safety, and an evidence gate before release.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Aubin Haba"
+      }
+    }
+  ]
+}

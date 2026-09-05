@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "payment-grade",
+  "displayName": "Payment Grade",
+  "version": "1.0.0",
+  "description": "Six review skills and three guard hooks for backends where a silent defect costs money: PCI scope, distributed consistency, architectural boundaries, test strength, AWS change safety, and an evidence gate before release.",
+  "author": {
+    "name": "Aubin Haba",
+    "url": "https://github.com/aubinhaba"
+  },
+  "homepage": "https://github.com/aubinhaba/claude-code-payment-skills",
+  "repository": "https://github.com/aubinhaba/claude-code-payment-skills",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "code-review",
+    "payments",
+    "pci-dss",
+    "java",
+    "spring-boot",
+    "aws",
+    "terraform",
+    "mutation-testing",
+    "hexagonal-architecture",
+    "idempotency"
+  ],
+  "hooks": "./hooks/hooks.json"
+}
