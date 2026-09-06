@@ -5,6 +5,10 @@
 
 'use strict';
 
+const path = require('path');
+
+const OWN_SOURCE = path.resolve(__filename);
+
 const KNOWN_TEST_PANS = new Set([
   '4242424242424242', '4111111111111111', '4000000000000002', '4000000000009995',
   '4000056655665556', '5555555555554444', '5105105105105100', '5200828282828210',
@@ -14,6 +18,9 @@ const KNOWN_TEST_PANS = new Set([
 ]);
 
 const TEST_PATH = /(^|[\\/])(test|tests|__tests__|spec|fixtures?|testdata|mocks?)([\\/]|$)|\.(test|spec|it)\.[a-z]+$|src[\\/]test[\\/]/i;
+
+/** Prose. A published test PAN here is a documented example, not a stored card. */
+const DOC_PATH = /\.(md|markdown|mdx|txt|adoc|rst)$/i;
 
 // Brand prefixes. Luhn alone is a 1-in-10 coincidence on any 16-digit number;
 const BRAND = /^(4\d{12}(\d{3})?(\d{3})?|5[1-5]\d{14}|2(2[2-9]\d|[3-6]\d{2}|7[01]\d|720)\d{12}|3[47]\d{13}|6(011|5\d{2})\d{12}|3(0[0-5]|[68]\d)\d{11}|35(2[89]|[3-8]\d)\d{12})$/;
@@ -50,7 +57,7 @@ function luhn(digits) {
 }
 
 /** Text a Write/Edit/MultiEdit/NotebookEdit call is about to put on disk. */
-function newContent(toolName, input) {
+function newContent(input) {
   if (!input) return '';
   const parts = [];
   if (typeof input.content === 'string') parts.push(input.content);
@@ -112,14 +119,24 @@ function neighbourhood(lines, i, radius) {
   return lines.slice(Math.max(0, i - radius), i + radius + 1).join('\n');
 }
 
+/** True when the write targets this guard itself, the one file it must not police. */
+function isOwnSource(file) {
+  if (!file) return false;
+  const resolved = path.resolve(file);
+  return process.platform === 'win32'
+    ? resolved.toLowerCase() === OWN_SOURCE.toLowerCase()
+    : resolved === OWN_SOURCE;
+}
+
 function decide(payload) {
-  const toolName = payload.tool_name || '';
   const input = payload.tool_input || {};
-  const path = input.file_path || input.notebook_path || '';
-  const text = newContent(toolName, input);
+  const filePath = input.file_path || input.notebook_path || '';
+  if (isOwnSource(filePath)) return null;
+
+  const text = newContent(input);
   if (!text) return null;
 
-  const inTestPath = TEST_PATH.test(path);
+  const inTestPath = TEST_PATH.test(filePath);
 
   for (const s of SECRETS) {
     const m = text.match(s.re);
@@ -127,7 +144,7 @@ function decide(payload) {
       return {
         decision: 'deny',
         reason:
-          `payment-grade: refusing to write a ${s.name} into ${path || 'this file'} ` +
+          `payment-grade: refusing to write a ${s.name} into ${filePath || 'this file'} ` +
           `(line ${lineOf(text, m.index)}). Move it to the secret store and reference it ` +
           `by name. If this is a fake value for a test, make it obviously fake.`,
       };
@@ -144,10 +161,21 @@ function decide(payload) {
       return {
         decision: 'ask',
         reason:
-          `payment-grade: line ${line} of ${path} contains ${masked}, a Luhn-valid number ` +
+          `payment-grade: line ${line} of ${filePath} contains ${masked}, a Luhn-valid number ` +
           `with a real card brand prefix. In a test source that is usually generated test ` +
           `data and fine. Confirm it did not come from a real cardholder, and prefer one of ` +
           `the published test PANs so the next reader does not have to ask.`,
+      };
+    }
+
+    if (known && DOC_PATH.test(filePath)) {
+      return {
+        decision: 'ask',
+        reason:
+          `payment-grade: ${masked} is a well-known test card number and ${filePath} is ` +
+          `documentation. Published test PANs are not cardholder data, so this is usually ` +
+          `fine. Confirm the number came from the published list rather than a real card, ` +
+          `and remember that a reader may copy it straight out of the prose into a fixture.`,
       };
     }
 
@@ -155,7 +183,7 @@ function decide(payload) {
       return {
         decision: 'deny',
         reason:
-          `payment-grade: ${masked} is a well-known test card number, and ${path} is not a ` +
+          `payment-grade: ${masked} is a well-known test card number, and ${filePath} is not a ` +
           `test path. Test PANs belong in test sources only — outside them they end up in ` +
           `fixtures, seeds and demos that later get pointed at production.`,
       };
@@ -164,7 +192,7 @@ function decide(payload) {
     return {
       decision: 'deny',
       reason:
-        `payment-grade: line ${line} of ${path || 'this file'} contains ${masked}, a ` +
+        `payment-grade: line ${line} of ${filePath || 'this file'} contains ${masked}, a ` +
         `Luhn-valid number with a real card brand prefix. Writing a PAN to a source file ` +
         `puts the repository, every clone of it and its whole history inside PCI scope. ` +
         `Use a token, a masked value, or one of the published test PANs in a test source.`,
@@ -194,7 +222,7 @@ function decide(payload) {
       return {
         decision: 'ask',
         reason:
-          `payment-grade: line ${i + 1} of ${path || 'this file'} looks like it stores or ` +
+          `payment-grade: line ${i + 1} of ${filePath || 'this file'} looks like it stores or ` +
           `logs a CVV/CVC. The verification value must never be persisted or logged — not ` +
           `encrypted, not temporarily, not in a retry payload or an outbox row. Confirm this ` +
           `is a transient request field and not a stored one.`,

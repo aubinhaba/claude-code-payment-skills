@@ -6,6 +6,8 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const MAX_TRANSCRIPT_BYTES = 32 * 1024 * 1024;
 
@@ -16,7 +18,20 @@ const SOURCE_FILE =
   /\.(java|kt|kts|scala|groovy|gradle|xml|ya?ml|properties|sql|tf|tfvars|ts|tsx|js|jsx|py|go|rs|sh)$/i;
 
 /** Prose, CI config and the agent's own configuration are not the running system. */
-const EXCLUDED_PATH = /(^|[\\/])(\.claude|\.github|docs)([\\/]|$)|\.md$/i;
+const EXCLUDED_PATH = /(^|[\\/])(\.claude|\.github|docs|tmp|temp|scratchpad)([\\/]|$)|\.md$/i;
+
+const TMP_ROOT = path.resolve(os.tmpdir());
+
+/**
+ * Scratch files are not the running system.
+ */
+function isExcluded(file) {
+  if (EXCLUDED_PATH.test(file)) return true;
+  const resolved = path.resolve(file);
+  const a = process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  const b = process.platform === 'win32' ? TMP_ROOT.toLowerCase() : TMP_ROOT;
+  return a === b || a.startsWith(b + path.sep);
+}
 
 /**
  * Commands that count as evidence. Mutation testing is here because
@@ -102,7 +117,7 @@ function analyse(entries) {
 
       if (MUTATING_TOOLS.has(use.name)) {
         const file = input.file_path || input.notebook_path || '';
-        if (SOURCE_FILE.test(file) && !EXCLUDED_PATH.test(file)) {
+        if (SOURCE_FILE.test(file) && !isExcluded(file)) {
           state.lastChange = file;
           state.lastChangeAt = index;
           state.changedFiles.add(file);

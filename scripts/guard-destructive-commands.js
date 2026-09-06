@@ -133,7 +133,7 @@ const RULES = [
  * hidden in a quote is still a destructive command once the shell expands it.
  */
 function normalise(command) {
-  return stripComments(String(command).replace(/\\n/g, ' ')).trim();
+  return stripComments(String(command).replace(/\\\r?\n/g, '').replace(/\\n/g, ' ')).trim();
 }
 
 /**
@@ -197,6 +197,20 @@ function segments(command) {
     .filter((part) => part.text);
 }
 
+/** Commands whose message flags carry prose the shell never executes. */
+const MESSAGE_COMMAND = /^(git|gh|glab|jj|hg)\b/;
+const MESSAGE_FLAG =
+  /(^|\s)(-m|-F|--message|--title|--body|--description)(=|\s+)("[^"]*"|'[^']*'|\S+)/g;
+
+/**
+ * Blank the prose carried by a message flag on a version-control command.
+ */
+function redactMessageArguments(text) {
+  if (!MESSAGE_COMMAND.test(text)) return text;
+  return text.replace(MESSAGE_FLAG, (match, lead, flag, separator, value) =>
+    /\$\(|`/.test(value) ? match : lead + flag + (separator === '=' ? '=' : ' ') + '""');
+}
+
 /** A segment that only reads or prints cannot destroy anything, even if it names a rule. */
 const EXPLAIN_ONLY = /^(man|help|echo|printf|cat|less|grep|rg|which|type)\b/;
 
@@ -211,8 +225,10 @@ function decide(payload) {
   for (const segment of segments(normalise(command))) {
     if (EXPLAIN_ONLY.test(segment.text) && !segment.pipedInto) continue;
 
+    const text = redactMessageArguments(segment.text);
+
     for (const rule of RULES) {
-      if (!rule.re.test(segment.text)) continue;
+      if (!rule.re.test(text)) continue;
       const verdict = { decision: rule.decision, reason: `payment-grade guard: ${rule.reason}` };
       if (rule.decision === 'deny') return verdict;
       if (!pending) pending = verdict;
