@@ -1,0 +1,13 @@
+{
+  "name": "claude-code-payment-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Contract tests for the payment-grade guard hooks. The plugin itself has no runtime dependencies.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
