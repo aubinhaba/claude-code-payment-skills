@@ -1,7 +1,7 @@
 ---
 name: production-readiness
 description: An evidence gate before a change is called done or released. Every claim must be backed by a command that was run and its output — build, tests, mutation score, security scan, migration safety, rollback plan, feature flag, alarms and runbook. Refuses to report completion on assumption. Use before merging or releasing, when writing a definition of done, when preparing a release checklist or a PR description, when a database migration or a feature flag is part of the change, or whenever an agent or a person is about to say the implementation is complete.
-allowed-tools: Read, Grep, Glob, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(mvn:*), Bash(./mvnw:*), Bash(./gradlew:*), Bash(npm test:*), Bash(npm run:*)
+allowed-tools: Read, Grep, Glob, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(mvn -q clean compile:*), Bash(mvn -q verify:*), Bash(mvn -q test:*), Bash(mvn verify:*), Bash(mvn test:*), Bash(mvn org.pitest:*), Bash(./mvnw -q clean compile:*), Bash(./mvnw -q verify:*), Bash(./mvnw -q test:*), Bash(./mvnw verify:*), Bash(./mvnw test:*), Bash(./mvnw org.pitest:*), Bash(./gradlew test:*), Bash(./gradlew check:*), Bash(./gradlew pitest:*), Bash(npm test:*), Bash(npm run test:*), Bash(npm run lint:*)
 license: MIT
 ---
 
@@ -17,8 +17,9 @@ write `NOT VERIFIED` and say why. A gate with honest gaps is useful. A gate with
 optimistic ticks is worse than no gate, because it transfers responsibility to whoever
 believed it.
 
-Invoke it deliberately at the end of a task — `/payment-grade:production-readiness` —
-rather than waiting for it to trigger. The moment this skill is most needed is the
+Invoke it deliberately at the end of a task — `/payment-grade:production-readiness`, or
+`/production-readiness` when the skill was copied into `.claude/skills/` — rather than
+waiting for it to trigger. The moment this skill is most needed is the
 moment a session is most inclined to skip it.
 
 ## The evidence table
@@ -93,10 +94,8 @@ tested in the off state. If the flag matters, prove both paths.
   distribution?
 - **Logs**: enough to reconstruct a single transaction end to end (correlation id
   propagated across the queue boundary), and no sensitive data (see `payment-review`).
-- **Runbook**: one paragraph. What breaks, how it looks, what to do first. Written now,
-  while the change is understood, not during the incident. See
-  `references/runbook-template.md` for the one page worth writing before the release
-  rather than during the incident.
+- **Runbook**: one paragraph. What breaks, how it looks, what to do first — written now,
+  while the change is understood, rather than during the incident.
 - **Load**: does the change alter the load on a shared dependency — more queries per
   request, a new N+1, a new call to a service sized for the old traffic?
 

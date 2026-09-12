@@ -11,7 +11,7 @@ Each entry gives the rule and the failure it prevents.
 | Setting | Rule | Failure it prevents |
 | :--- | :--- | :--- |
 | `visibility_timeout_seconds` | ≥ 6 × the consumer's timeout (AWS guidance for Lambda event source mappings) | The message reappears while the first consumer still holds it — the work runs twice |
-| `redrive_policy.maxReceiveCount` | 3–5 | A poison message consuming the queue's throughput until retention expires |
+| `redrive_policy.maxReceiveCount` | ≥ 5 for a Lambda consumer (AWS guidance), and bounded | Below it, a message that failed once or twice on a transient error lands in the DLQ; unbounded, a poison message consumes the queue's throughput until retention expires |
 | DLQ | Always present, with its own alarm on depth > 0 | Silent loss; a DLQ nobody watches is a delayed delete |
 | `message_retention_seconds` | Long enough to survive a weekend outage (4–14 days) | Losing the backlog while the fix is being written |
 | `receive_wait_time_seconds` | 20 (long polling) | Empty-receive cost and needless latency |
@@ -41,7 +41,8 @@ fix, and someone needs to have done that once, in staging, before the night it m
 | ALB `deregistration_delay` | ≥ the longest in-flight request | Dropped requests on every deploy |
 | Container `stopTimeout` | > graceful shutdown period | SIGKILL mid-request |
 | App graceful shutdown | `server.shutdown=graceful` + `spring.lifecycle.timeout-per-shutdown-phase` | The same, from the application side |
-| ALB `idle_timeout` | > the app's own read timeout | 502s attributed to the application when the LB closes first |
+| ALB `idle_timeout` | > the slowest legitimate response | The LB closing a connection under a request that is still running — a 504 |
+| App keep-alive timeout | > ALB `idle_timeout` (AWS's recommendation) | The app closing an idle connection the LB is about to reuse — a 502 attributed to the application |
 | `deployment_circuit_breaker` | Enabled with `rollback = true` | A broken image rolling out to every task |
 | `minimum_healthy_percent` / `maximum_percent` | 100 / 200 for a request-path service | Capacity dropping below demand during a deploy |
 | JVM heap | `-XX:MaxRAMPercentage=75` or an explicit `-Xmx` | The JVM sizing against the host's memory and being OOM-killed |
@@ -77,8 +78,9 @@ caller gives up on a request that is still executing, retries it, and the retry 
 a system already doing the work.
 
 Derive the chain from the hard ceiling inward, not from the client outward. On AWS the
-ceiling is usually API Gateway's integration timeout — 29 s for a REST API unless the
-account quota has been raised:
+ceiling is usually API Gateway's integration timeout — 29 s for a REST API, fixed for
+edge-optimized APIs and raisable by quota for Regional and private ones (at the cost of
+some of the account's throttle quota):
 
 ```
 API GW integration   >   ALB idle      >   service read   >   downstream read
@@ -93,8 +95,11 @@ chain entirely.
 
 Two consequences worth checking on any diff that touches these:
 
-- **The ALB idle timeout must exceed the application's own read timeout.** Inverted, the
-  load balancer closes first and the 502 is attributed to the application.
+- **The ALB idle timeout must exceed the slowest legitimate response**, or the load
+  balancer abandons a request that is still running and answers 504. **The application's
+  keep-alive must outlast the ALB idle timeout** — AWS's own recommendation — or the
+  application closes a connection the load balancer is about to reuse, and the client gets
+  a 502 attributed to the application.
 - **Retry budgets are part of the arithmetic.** A service with a 10 s budget that retries
   a 3 s call three times has spent 9 s before its own overhead. Retries with exponential
   backoff and jitter, inside a stated total budget — fixed-interval retries from every

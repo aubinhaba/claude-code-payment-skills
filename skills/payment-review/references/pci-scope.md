@@ -18,7 +18,7 @@ That asymmetry is the reason this review exists.
 | PIN / PIN block | Cardholder PIN | **Never** |
 | Expiry, cardholder name | Cardholder data when stored with the PAN | Yes, but they inherit the PAN's protection |
 | Token | A surrogate with no exploitable value outside the vault | Yes — that is the point |
-| Masked PAN | First six and/or last four, the rest redacted | Yes |
+| Truncated PAN | First six and last four as the baseline; for a 16-digit PAN, at most the first eight and any other four (PCI SSC FAQ 1091) | Yes |
 
 "Never" means never: not encrypted, not for three seconds, not in memory beyond the
 authorization call, not in a retry buffer, not in a support ticket, not in an outbox

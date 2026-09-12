@@ -99,7 +99,10 @@ field assignment.
   database constraint or a guarded `UPDATE ... WHERE status = ?`.
 - **Refund total ≤ captured total**, checked under a lock or by a constraint, not by a
   read-then-write that two concurrent refunds both pass.
-- **Capture ≤ authorized**, and authorization expiry is respected.
+- **Capture ≤ authorized**, and authorization expiry is respected. Where the PSP supports
+  over-capture, the bound is the network's ceiling for the merchant category (+15% to +30%
+  on Visa, Mastercard, Amex and Discover, by country and category), not the authorized
+  amount: a hard `captured <= authorized` constraint rejects every tip-adjusted capture.
 - Is the transition **idempotent** on retry? A payment change that is not safe to
   replay is a payment change that will double-charge. If the diff touches callbacks,
   retries or queue consumers, run `consistency-review` as well — that is where those

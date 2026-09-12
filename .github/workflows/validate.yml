@@ -1,0 +1,57 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate the pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax-check the guards
+        run: |
+          for guard in scripts/*.js; do
+            node --check "$guard"
+            echo "ok  $guard"
+          done
+
+      - name: Validate the pack structure
+        run: node scripts/validate-pack.js
+
+      # The README claims the guards fail open. This is what makes that claim checkable
+      # rather than aspirational: the case table asserts the denies, the allows, and a
+      # zero exit with no decision on every malformed payload.
+      - name: Guard case table
+        run: npm test
+
+  cross-platform:
+    name: Guards on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The README says the guards work identically on Windows, macOS and Linux. The
+      # path regexes in guard-card-data.js are the part that would quietly stop
+      # matching on a backslash separator, so the claim is worth running.
+      - name: Guard case table
+        run: npm test

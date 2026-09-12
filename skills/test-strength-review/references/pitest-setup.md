@@ -45,6 +45,7 @@ sweep on a schedule instead.
     <mutators>
       <mutator>DEFAULTS</mutator>
       <mutator>REMOVE_CONDITIONALS</mutator>
+      <mutator>EXPERIMENTAL_BIG_DECIMAL</mutator>
       <mutator>EXPERIMENTAL_BIG_INTEGER</mutator>
     </mutators>
 
@@ -62,12 +63,14 @@ sweep on a schedule instead.
 </plugin>
 ```
 
-`EXPERIMENTAL_BIG_INTEGER` mutates `BigInteger` **and** `BigDecimal` operations — `add`
-to `subtract`, scale and rounding changes. On a money codebase it is the highest-value
-mutator available and it is off by default. The name says INTEGER; the coverage includes
-`BigDecimal`, which is why it is easy to go looking for a `BIG_DECIMAL` operator that
-does not exist. An unknown operator name fails PIT at startup, before a single mutant is
-generated — check the operator list of your PIT version if the build stops there.
+`EXPERIMENTAL_BIG_DECIMAL` swaps `BigDecimal` operations — `add` for `subtract`, and the
+like. On a money codebase it is the highest-value mutator available, and it is off by
+default. `EXPERIMENTAL_BIG_INTEGER` does the same for `BigInteger` only: enabling it alone
+generates not one mutant on `BigDecimal` arithmetic, and the report stays green without
+saying so. Both operators are registered from PIT 1.17.0 onwards, even though the mutator
+list on pitest.org names only the BigInteger one. An unknown operator name fails PIT at
+startup, before a single mutant is generated — check the operator list of your PIT version
+if the build stops there.
 
 ## The three numbers, and which one to argue about
 

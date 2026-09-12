@@ -114,7 +114,7 @@ run in two pods at once:
 
 | Invariant | Enforcement |
 | :--- | :--- |
-| Captured ≤ authorized | Check constraint on the payment row, or a guarded UPDATE |
+| Captured ≤ authorized, or ≤ the over-capture ceiling the card network grants the merchant category | Check constraint on the payment row, or a guarded UPDATE — with the ceiling held as data, not as a literal |
 | Σ refunds ≤ captured | Constraint on a derived total, or `SELECT ... FOR UPDATE` on the payment before insert |
 | One refund per idempotency key | Unique index on `(merchant_id, idempotency_key)` |
 | Terminal state never leaves | `UPDATE ... WHERE status = 'PENDING'` and assert one row affected |
@@ -132,7 +132,7 @@ comfortable success rate.
 - [ ] `compareTo` rather than `equals` for `BigDecimal`
 - [ ] Every division has an explicit `RoundingMode` and a residual rule
 - [ ] Split/instalment amounts sum exactly to the total, proven by a test
-- [ ] Refund ≤ capture ≤ authorization, enforced in the database
+- [ ] Refund ≤ capture ≤ authorization (or its over-capture ceiling), enforced in the database
 - [ ] Conversion rate and timestamp persisted with any converted amount
 - [ ] Overflow fails loudly (`Math.addExact`) rather than wrapping
 - [ ] Amounts at capture/refund come from the stored record, never from the client

@@ -23,6 +23,5 @@
     "mutation-testing",
     "hexagonal-architecture",
     "idempotency"
-  ],
-  "hooks": "./hooks/hooks.json"
+  ]
 }

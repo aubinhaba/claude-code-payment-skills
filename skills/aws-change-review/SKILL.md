@@ -44,9 +44,9 @@ Ask for these before an apply that contains any replace or destroy:
 plan with more than a handful of resources, ask what the world looks like if it stops in
 the middle, and whether the next apply is safe to run.
 
-`references/terraform-plan-triage.md` has the `jq` commands that extract the dangerous
-subset from a plan, the attributes that force replacement quietly, and the state-hygiene
-checks worth doing once per review.
+Read the plan as JSON rather than as text where the plan is large: `terraform show -json
+tfplan` lists every `resource_changes[].change.actions`, which is where a destroy or a
+replace hides in a wall of diff.
 
 ## 2. IAM, network, secrets
 
@@ -78,8 +78,9 @@ change.
 - Queue `visibility_timeout` must be **at least 6× the Lambda timeout** (AWS's own
   guidance for event source mappings). Below that, the message reappears while the first
   invocation is still running and the work is done twice.
-- `redrive_policy` present, with a `maxReceiveCount` that is small (3–5). No DLQ means a
-  poison message loops until the retention period expires.
+- `redrive_policy` present, with a `maxReceiveCount` of at least 5 — AWS's guidance for
+  Lambda event sources, so a message gets a few retries before it is sent to the DLQ. No
+  DLQ means a poison message loops until the retention period expires.
 - Alarm on the DLQ depth. A DLQ without an alarm is a delete with extra latency.
 - Reserved concurrency: without it, a burst on this queue consumes the account's
   concurrency and takes unrelated functions down. With it set too low, the queue backs
@@ -95,8 +96,10 @@ change.
   SIGTERM with a graceful shutdown (`server.shutdown=graceful`,
   `spring.lifecycle.timeout-per-shutdown-phase`). Otherwise every deploy drops requests.
 - `stopTimeout` greater than the graceful shutdown period.
-- ALB idle timeout **greater than** the application's own read timeout, and both greater
-  than the slowest legitimate request. Mismatched, they produce 502s attributed to the app.
+- ALB idle timeout **greater than** the slowest legitimate request, or the load balancer
+  gives up on a request still running and answers 504. And the application's keep-alive
+  timeout **greater than** the ALB idle timeout, or the application closes connections the
+  load balancer is about to reuse, and each one becomes a 502 attributed to the app.
 - `deploymentConfiguration`: `minimumHealthyPercent` / `maximumPercent` allowing a
   rolling deploy without dropping below capacity; circuit breaker with rollback enabled.
 - CPU/memory: a JVM without container-aware heap settings will size against the host it
@@ -113,9 +116,9 @@ change.
 
 **API Gateway / ALB / clients**
 - Every timeout set explicitly, and the budgets shrinking as the chain goes deeper:
-  gateway > load balancer > service > downstream call. Derive it from the hard ceiling
-  inward — API Gateway's 29 s integration timeout on a REST API — not from the client
-  outward. Where the order inverts, the outer caller abandons a request that is still
+  gateway > load balancer > service > downstream call. Derive it from the ceiling inward —
+  API Gateway's 29 s integration timeout on a REST API, fixed for edge-optimized APIs and
+  raisable by quota for Regional and private ones — not from the client outward. Where the order inverts, the outer caller abandons a request that is still
   running, retries stack, and one slow dependency becomes a full outage.
 
 ## 4. Observability and cost, briefly
