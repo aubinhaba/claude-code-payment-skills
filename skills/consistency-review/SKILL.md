@@ -123,6 +123,21 @@ Review:
   periodic comparison — our terminal states against theirs — and a report of the
   differences. Without it, the system's correctness depends on no message ever being
   lost, which is not a property any queue offers.
+- **The job that does the reconciling is itself a distributed problem.** It runs on two
+  instances unless a leader election or a database advisory lock says otherwise; it
+  overlaps with its own previous run when it takes longer than its interval; and it
+  needs per-item state, not per-batch, or one bad row re-does the whole batch forever.
+
+## 6. New configuration is part of the change
+
+A diff that introduces a property, an environment variable or a `@Value` placeholder has
+added a startup dependency. Locate that exact key in **every** environment's
+configuration — not just the one the author runs locally. A placeholder with no value
+anywhere is a BLOCKER on its own: the service does not start, in any environment, and no
+test catches it because tests wire their dependencies directly.
+
+Same for a key that exists everywhere but under a different name, and for a default
+(`${pia.x:fallback}`) that silently makes the wrong environment look configured.
 
 ## Failure-scenario table
 
@@ -136,8 +151,14 @@ useful to the author, and it is the artefact worth pasting into the PR.
 | S3 | Callback arrives before local commit | Event parked, retried | Placeholder upsert | partial |
 | S4 | Relay crashes after publish, before mark | Duplicate publish, consumer absorbs | At-least-once + S1 | yes |
 
-See `references/failure-modes.md` for the full catalogue to draw from, and for the
-mechanism that answers each one.
+Two questions generate most of the rows. Ask the first of **every** effect in the diff —
+the database write, the event publication, the metric increment, the remote call — and
+not only of the database write: **what if this happens twice?** Then ask the second of
+every effect that leaves this process: **what if this succeeded but we never learned
+that it did?**
+
+Where an effect in the diff has no row that covers it, read `references/failure-modes.md`
+and take the numbered scenario that matches, rather than inventing a label for it.
 
 ## Output format
 

@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "payment-grade",
   "displayName": "Payment Grade",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Six review skills and three guard hooks for backends where a silent defect costs money: PCI scope, distributed consistency, architectural boundaries, test strength, AWS change safety, and an evidence gate before release.",
   "author": {
     "name": "Aubin Haba",

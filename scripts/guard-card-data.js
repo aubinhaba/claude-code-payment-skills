@@ -71,6 +71,39 @@ function newContent(input) {
   return parts.join('\n');
 }
 
+/**
+ * A shell command that puts bytes on disk. The Write/Edit matcher never sees these, so a
+ * heredoc, a redirect or `sed -i` carried a PAN straight past this guard; writing test
+ * fixtures that way is exactly how it was found. `>&` is excluded so `2>&1` is not a write.
+ */
+const SHELL_WRITE =
+  /(?:^|[\s;&|(])(?:tee\b|sed\s+(?:-[a-zA-Z]*i[a-zA-Z]*|--in-place)\b|Set-Content\b|Add-Content\b|Out-File\b)|>>?\s*(?![&\s])/i;
+
+/** Best effort at the file a write form is aimed at, so test and doc paths still apply. */
+const SHELL_TARGETS = [
+  /\btee\s+(?:-a\s+)?(?:"([^"]+)"|'([^']+)'|([^\s;&|<>]+))/i,
+  /\b(?:Set-Content|Add-Content|Out-File)\b(?:\s+-(?:Path|FilePath|LiteralPath))?\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|<>]+))/i,
+  /\bsed\s+(?:-[a-zA-Z]*i[a-zA-Z]*|--in-place)\S*(?:\s+-e\s+\S+)*\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|<>]+))/i,
+  />>?\s*(?:"([^"]+)"|'([^']+)'|([^\s;&|<>]+))/,
+];
+
+/**
+ * Why the shell path only ever asks: the guard reads the command, not the bytes it will
+ * produce. A variable, a pipe or a generated value is invisible here, so a deny would be
+ * a guess. A person decides.
+ */
+const SHELL_CAVEAT =
+  'This came through a shell command rather than a file write, so the guard is reading the ' +
+  'command and not the bytes it will produce — it asks rather than refuses.';
+
+function shellTarget(command) {
+  for (const re of SHELL_TARGETS) {
+    const m = command.match(re);
+    if (m) return m[1] || m[2] || m[3] || '';
+  }
+  return '';
+}
+
 function findPans(text) {
   const hits = [];
   for (const match of text.matchAll(DIGIT_RUN)) {
@@ -128,14 +161,7 @@ function isOwnSource(file) {
     : resolved === OWN_SOURCE;
 }
 
-function decide(payload) {
-  const input = payload.tool_input || {};
-  const filePath = input.file_path || input.notebook_path || '';
-  if (isOwnSource(filePath)) return null;
-
-  const text = newContent(input);
-  if (!text) return null;
-
+function judge(text, filePath) {
   const inTestPath = TEST_PATH.test(filePath);
 
   for (const s of SECRETS) {
@@ -231,6 +257,32 @@ function decide(payload) {
   }
 
   return null;
+}
+
+/** The text about to be written, and the file it is aimed at, whichever tool was used. */
+function extract(payload) {
+  const input = payload.tool_input || {};
+  const shell = payload.tool_name === 'Bash' || payload.tool_name === 'PowerShell';
+
+  if (!shell) {
+    return { text: newContent(input), filePath: input.file_path || input.notebook_path || '', shell };
+  }
+
+  const command = typeof input.command === 'string' ? input.command : '';
+  if (!command || !SHELL_WRITE.test(command)) return null;
+  return { text: command, filePath: shellTarget(command), shell };
+}
+
+function decide(payload) {
+  const found = extract(payload);
+  if (!found || !found.text) return null;
+  if (isOwnSource(found.filePath)) return null;
+
+  const verdict = judge(found.text, found.filePath);
+  if (!verdict || !found.shell) return verdict;
+
+  // Never refuse on the shell path — see SHELL_CAVEAT.
+  return { decision: 'ask', reason: `${verdict.reason} ${SHELL_CAVEAT}` };
 }
 
 function main() {

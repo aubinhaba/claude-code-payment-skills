@@ -44,8 +44,10 @@ that is the finding — and it names the missing test precisely.
 
 If the project does not run mutation testing, propose it *scoped*: on the domain and
 application packages, on changed classes in merge-request pipelines, with a threshold
-that starts where the code is today. `references/pitest-setup.md` has a Maven
-configuration and a CI job that stay under a few minutes.
+that starts where the code is today. When you make that proposal, read
+`references/pitest-setup.md` and give the author the actual configuration — a proposal to
+"add mutation testing" without the pom block and the pipeline step is a suggestion, not a
+finding.
 
 Where a high threshold (85–95%) is worth its cost:
 

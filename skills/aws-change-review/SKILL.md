@@ -48,6 +48,17 @@ Read the plan as JSON rather than as text where the plan is large: `terraform sh
 tfplan` lists every `resource_changes[].change.actions`, which is where a destroy or a
 replace hides in a wall of diff.
 
+**A change inside a reusable module is a change to every caller, differently.** Grep for
+the module's `source` and enumerate each instantiation. Then, per instance, say which
+values it passes and which it leaves to the module's defaults — because those are the
+instances the change actually hits. Two traps live here:
+
+- an argument the module no longer reads is still accepted and silently ignored, so a
+  caller that sets `max_receive_count = 2` with a comment explaining why keeps the
+  comment and loses the behaviour;
+- a lowered default hits only the callers that do not override it, so the queue whose
+  override you can see is the safe one and the one you cannot is the broken one.
+
 ## 2. IAM, network, secrets
 
 - **IAM**: `"Action": "*"`, `"Resource": "*"`, `iam:PassRole` without a condition,
@@ -70,9 +81,10 @@ replace hides in a wall of diff.
 ## 3. Runtime settings that decide behaviour under stress
 
 These are configuration values, so they pass review by looking plausible. They are the
-ones that produce the incident. `references/runtime-settings.md` holds the full table
-with the failure each rule prevents; the checks below are the ones worth doing on every
-change.
+ones that produce the incident. The checks below are the ones that apply to every change;
+when the diff touches a setting that is not among them, read
+`references/runtime-settings.md` and quote the failure that rule prevents, because a
+timeout or a concurrency number means nothing without it.
 
 **SQS → Lambda**
 - Queue `visibility_timeout` must be **at least 6× the Lambda timeout** (AWS's own

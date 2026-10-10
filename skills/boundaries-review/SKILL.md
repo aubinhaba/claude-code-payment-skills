@@ -97,10 +97,9 @@ Look for:
 The finding that matters most in this review is: **nothing prevents the next violation.**
 
 If the project has no architecture test, that is a MAJOR finding on its own, and the fix
-is small. `references/archunit-rules.md` contains a ready set of rules for the layout
-above, including the ones worth having beyond layering (no `System.out`, no field
-injection, no `@Transactional` on controllers, repositories only reachable from
-infrastructure).
+is small. When that is the finding, read `references/archunit-rules.md` and put the rules
+this project's layout needs into the `Fix:` line, as code the author can paste. Describing
+them from memory produces a finding nobody acts on.
 
 Check also:
 - module boundaries enforced by the build (Maven modules, JPMS, Gradle projects) rather

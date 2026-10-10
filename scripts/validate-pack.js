@@ -189,18 +189,41 @@ function requireKeys(file, keys) {
     }
 
     // The body stays in context for the rest of the session once the skill loads, so
-    // length is a recurring cost. Long material belongs in references/.
-    const lines = fs.readFileSync(skill, 'utf8').split(/\r?\n/).length;
-    if (lines > 180) {
-      fail(skill, `${lines} lines — move the long material into references/ (budget: 180)`);
+    // length is a recurring cost. Long material belongs in references/ — but material the
+    // review needs on every run belongs here, because a measured run opened no reference
+    // at all. The ceiling went 180 -> 200 to make room for that, and not an inch more.
+    const body = fs.readFileSync(skill, 'utf8');
+    const lines = body.split(/\r?\n/).length;
+    if (lines > 200) {
+      fail(skill, `${lines} lines — move the long material into references/ (budget: 200)`);
     }
 
-    // A reference file nobody points at is dead weight the reader still pays to skim.
+    // A reference file is only deferred material if the body actually sends the reader to
+    // it. `See x.md for the rules` reads as a summary and gets skipped; four review runs
+    // opened none of the six files. So the pointer must be an instruction with a trigger,
+    // and must live in prose rather than inside a fenced example.
+    const prose = body.replace(/```[\s\S]*?```/g, '');
     const refDir = path.join(skillsDir, dir.name, 'references');
     if (fs.existsSync(refDir)) {
-      const body = fs.readFileSync(skill, 'utf8');
       for (const ref of fs.readdirSync(refDir)) {
-        if (!body.includes(ref)) fail(skill, `never references references/${ref}`);
+        const pointer = prose
+          .split(/\n{2,}/)
+          .find((para) => para.includes(ref));
+        if (!pointer) {
+          fail(skill, `never references references/${ref} outside a code block`);
+        } else if (!/\bread\b/i.test(pointer) || !/\b(when|if|where|before)\b/i.test(pointer)) {
+          fail(
+            skill,
+            `the pointer to references/${ref} is a summary, not an instruction — say when to read it`
+          );
+        }
+      }
+    }
+
+    // The reverse direction, which nothing checked: a pointer to a file that is gone.
+    for (const named of body.matchAll(/references\/([A-Za-z0-9._-]+\.md)/g)) {
+      if (!fs.existsSync(path.join(refDir, named[1]))) {
+        fail(skill, `points at references/${named[1]}, which does not exist`);
       }
     }
   }

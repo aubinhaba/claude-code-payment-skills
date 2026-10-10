@@ -17,8 +17,22 @@ const RULES = [
       'meant. See the aws-change-review skill for what to check first.',
   },
   {
+    // `terraform destroy` is a subcommand; `-destroy` is a flag on apply. The rule above
+    // only sees the subcommand, so `terraform apply -destroy` tore down infrastructure
+    // without a decision. -target does not soften this: it narrows what is destroyed,
+    // not whether it is.
     decision: 'deny',
-    re: /\bterraform\s+(-\S+\s+)*apply\b(?!.*(-target|\btfplan\b|\.tfplan\b|\.plan\b))/,
+    re: /\bterraform\s+apply\b.*\s-destroy\b/,
+    reason:
+      'terraform apply -destroy is terraform destroy under another name. If a teardown is ' +
+      'genuinely intended, plan it (terraform plan -destroy -out=tfplan), read the plan, ' +
+      'and run the apply yourself against the environment you meant.',
+  },
+  {
+    // -target was an exemption here until it was found to be the bypass: a targeted apply
+    // is still an apply of whatever the current state and variables produce.
+    decision: 'deny',
+    re: /\bterraform\s+(-\S+\s+)*apply\b(?!.*(\btfplan\b|\.tfplan\b|\.plan\b))/,
     reason:
       'terraform apply without a saved plan file applies whatever the current state and ' +
       'variables produce, which is not what was reviewed. Produce a plan (terraform plan ' +

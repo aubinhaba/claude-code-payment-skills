@@ -44,6 +44,9 @@ const bash = (command) => decision(BASH, { tool_name: 'Bash', tool_input: { comm
 const write = (file_path, content) =>
   decision(CARD, { tool_name: 'Write', tool_input: { file_path, content } });
 
+/** The card guard reading a shell command rather than a file write. */
+const shell = (command) => decision(CARD, { tool_name: 'Bash', tool_input: { command } });
+
 describe('guard-destructive-commands', () => {
   test('denies a destroy it can see plainly', () => {
     assert.equal(bash('terraform destroy -auto-approve'), 'deny');
@@ -103,6 +106,23 @@ describe('guard-destructive-commands', () => {
   test('apply is allowed from a reviewed plan and denied without one', () => {
     assert.equal(bash('terraform apply tfplan'), 'allow');
     assert.equal(bash('terraform apply -auto-approve'), 'deny');
+  });
+
+  // A teardown spelled as a flag on apply, rather than as the destroy subcommand, used to
+  // pass both terraform rules: the subcommand pattern never saw it, and -target exempted
+  // it from the saved-plan rule.
+  test('a destroy spelled as a flag on apply is still a destroy', () => {
+    assert.equal(bash('terraform apply -destroy -auto-approve -target=module.db'), 'deny');
+    assert.equal(bash('terraform apply -destroy'), 'deny');
+    assert.equal(bash('terraform apply -destroy=true -auto-approve'), 'deny');
+  });
+
+  test('narrowing an apply to one target does not excuse the missing plan', () => {
+    assert.equal(bash('terraform apply -target=module.db'), 'deny');
+  });
+
+  test('planning a destroy is reading, not doing', () => {
+    assert.equal(bash('terraform plan -destroy -out=tfplan'), 'allow');
   });
 
   test('an ask rule asks', () => {
@@ -204,6 +224,45 @@ describe('guard-card-data', () => {
     assert.equal(write('src/main/java/Ok.java', 'int total = 42;'), 'allow');
   });
 
+  // The Write/Edit matcher never saw a heredoc or a redirect, so writing a fixture from the
+  // shell carried a PAN straight past this guard. It now reads shell writes too, and only
+  // ever asks on that path: it is reading the command, not the bytes it will produce.
+  test('a heredoc write is a write', () => {
+    const cmd =
+      'cat > src/main/java/Seed.java << EOF' + NL + 'String pan = "' + UNKNOWN_PAN + '";' + NL + 'EOF';
+    assert.equal(shell(cmd), 'ask');
+  });
+
+  test('a redirect to a non-test path is caught, and asks rather than refuses', () => {
+    assert.equal(shell('echo ' + KNOWN_PAN + ' >> src/main/resources/seed.sql'), 'ask');
+  });
+
+  test('the target path still decides, so a test fixture written from the shell is fine', () => {
+    const cmd = 'printf "%s" "' + KNOWN_PAN + '" > src/test/resources/cards.txt';
+    assert.equal(shell(cmd), 'allow');
+  });
+
+  test('sed in place is a write', () => {
+    assert.equal(shell('sed -i "s/X/' + UNKNOWN_PAN + '/" src/main/resources/app.properties'), 'ask');
+  });
+
+  test('a PowerShell write is a write', () => {
+    assert.equal(
+      decision(CARD, {
+        tool_name: 'PowerShell',
+        tool_input: { command: 'Set-Content -Path src/main/Seed.cs -Value "' + UNKNOWN_PAN + '"' },
+      }),
+      'ask');
+  });
+
+  test('searching for a number is not writing one', () => {
+    assert.equal(shell('grep -rn "' + UNKNOWN_PAN + '" .'), 'allow');
+  });
+
+  test('a stderr redirect is not a file write', () => {
+    assert.equal(shell('java -jar app.jar --pan=' + UNKNOWN_PAN + ' 2>&1'), 'allow');
+  });
+
   test('a malformed payload fails open', () => {
     assert.equal(run(CARD, 'not json at all'), null);
   });
@@ -233,6 +292,24 @@ describe('guard-unverified-completion', () => {
 
   test('passes when a test run followed the change', () => {
     assert.equal(stop([edit('src/main/java/Pay.java'), ran('mvn -q verify')]), null);
+  });
+
+  // A runner the list does not know makes the gate fire after work that was verified,
+  // which teaches the author to route around it rather than to run anything.
+  test('recognises the runners a real project reaches for', () => {
+    for (const command of [
+      'node --test',
+      'npx vitest run',
+      'npx jest --ci',
+      'bun test',
+      'dotnet test',
+      'sbt "project core" test',
+      'bazel test //...',
+      'make check',
+      './mvnw -pl pia-domain -am test',
+    ]) {
+      assert.equal(stop([edit('src/main/java/Pay.java'), ran(command)]), null, command);
+    }
   });
 
   test('a test run before the change proves nothing about it', () => {

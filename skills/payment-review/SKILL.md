@@ -47,8 +47,10 @@ Check, in the diff and in what it calls:
   is not in the repository or in the same store as the data, and that a retention
   window exists and is enforced by a job, not by intention.
 
-See `references/pci-scope.md` for the questions to ask per component type and the
-common "it's only for support" traps.
+When this change puts a component in reach of card data for the first time — a service,
+a queue, a Lambda, a cache, a batch, a third-party SDK — read `references/pci-scope.md`
+and answer its questions for that component type before you write the verdict. Do not
+decide a scope question from memory.
 
 ## 2. Leakage — the PAN is in the logs
 
@@ -80,14 +82,27 @@ last four plus expiry plus cardholder name is not anonymous.
   object; if the codebase has one, flag any signature that decomposes it.
 - **No arithmetic between different currencies**, and no implicit conversion. If a
   conversion happens, the rate and its timestamp are part of the record.
+- **The minor-unit exponent comes from the currency, never from a literal.** JPY and KRW
+  have no decimals, TND and BHD have three. Any `amount * 100` is wrong for a currency
+  the merchant will onboard eventually — grep the diff for it. Derive the exponent from
+  `Currency#getDefaultFractionDigits`, or the PSP's own table where it differs.
 - **Rounding is declared, not inherited.** `BigDecimal` division without an explicit
   `RoundingMode` throws or, worse, is "fixed" by someone adding `ROUND_HALF_UP`
   without checking the scheme rules. Split payments, instalments and fee computation
   each need a stated rounding rule and a residual-allocation rule.
 - **Comparison**: `BigDecimal.equals` compares scale too — `10.0 != 10.00`. Use
   `compareTo`. This is a real bug in refund-equality checks.
+- **Overflow fails loudly.** `Math.addExact` rather than `+` on a money total. An
+  overflow should never happen, which is exactly why the one that does must not wrap
+  around in silence.
+- **One sign convention per codebase.** Refunds as negative amounts, or as positive
+  amounts on a separate record type, are both defensible; mixing the two is not. Check
+  which one the diff follows, and whether any aggregation sums across both.
 
-See `references/money.md` for the invariants a review should assert.
+When the diff computes a fee, an instalment, a split or a currency conversion, read
+`references/money.md` before writing the finding — the residual-allocation rules and the
+constraints that belong in the database are there, and a finding that cites the wrong
+rule is noise.
 
 ## 4. State and invariants
 

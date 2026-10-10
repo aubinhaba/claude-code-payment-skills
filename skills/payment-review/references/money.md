@@ -1,24 +1,14 @@
-# Money — the invariants a review should assert
+# Money — the rules the skill body does not carry
 
-Money bugs are not caught by types unless you give them types. Most of the defects
-below compile, pass review at a glance, and are found by an accountant.
+The representation and comparison rules are in the skill body, because every money review
+needs them. What follows is what you need once the diff actually computes something: a
+value object to paste, the places rounding decisions accumulate, and the invariants that
+belong in the database rather than in a service method.
 
-## Representation
+## A value object that makes the mistake unrepresentable
 
-**Never `float` or `double`.** `0.1 + 0.2 != 0.3` is not a curiosity, it is a
-reconciliation break. Two acceptable representations:
-
-- `BigDecimal` with an explicit scale, or
-- integer **minor units** (`long cents`), which is what most PSP APIs speak.
-
-Minor units are not universally two decimals. JPY and KRW have zero, TND and BHD have
-three. Any code that hardcodes `amount * 100` is wrong for a currency you will onboard
-eventually. Derive the exponent from the currency (`java.util.Currency#getDefaultFractionDigits`,
-or the PSP's own table when it differs).
-
-**Amount and currency are one value.** A method that takes `(long amount, String currency)`
-lets a caller pass them in the wrong order, or forget the currency in one branch. A
-`Money` record makes the mistake unrepresentable:
+A method that takes `(long amount, String currency)` lets a caller pass them in the wrong
+order, or forget the currency in one branch:
 
 ```java
 public record Money(long minorUnits, Currency currency) {
@@ -48,16 +38,7 @@ public record Money(long minorUnits, Currency currency) {
 }
 ```
 
-`Math.addExact` rather than `+`: an overflow on a money total should fail loudly, not
-wrap around. Neither event should ever happen, which is exactly why the one that does
-must not be silent.
-
-## Comparison
-
-`BigDecimal.equals` compares scale as well as value: `new BigDecimal("10.0")` is not
-equal to `new BigDecimal("10.00")`. Use `compareTo(...) == 0`. This shows up in refund
-"is this the full amount?" checks, where one side comes from the database (scale 2) and
-the other from a PSP response (scale 1), and the full refund is recorded as partial.
+## Comparison, past the `compareTo` rule
 
 If the codebase uses `BigDecimal` in entities, check `equals`/`hashCode` on any value
 object wrapping it, and any use of a `Set<Money>` or a map keyed by amount.
@@ -97,11 +78,7 @@ void instalments_sum_exactly_to_the_total() {
 Then run it as a property over many totals and counts. Instalment splitting is the
 canonical place where a property-based test pays for itself in one afternoon.
 
-## Sign and direction
-
-Refunds as negative amounts, or as positive amounts on a different record type, are both
-defensible. Mixing the two conventions in one codebase is not. Check which convention
-the diff follows and whether any aggregation sums across both.
+## The ledger invariant
 
 A ledger with a sign convention needs the invariant written down: for a given payment,
 `sum(credits) - sum(debits)` equals the balance, and the balance is never negative unless

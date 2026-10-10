@@ -50,6 +50,14 @@ const VERIFICATION = [
   /\btsc\b/,
   /\bterraform\s+(validate|plan|fmt)\b/,
   /\bdocker\s+build\b/,
+  // A runner missing from this list makes the gate fire after work that was verified,
+  // which teaches the author to route around the gate rather than to run anything.
+  /\bnode\s+--test\b/,
+  /\b(npx\s+)?(vitest|jest)\b/,
+  /\bbun\s+test\b/,
+  /\bdotnet\s+test\b/,
+  /\b(sbt|bazel)\b[^\n]*\btest\b/,
+  /\bmake\s+(test|check|verify|lint)\b/,
 ];
 
 /**
