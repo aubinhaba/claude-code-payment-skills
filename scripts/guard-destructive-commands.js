@@ -196,15 +196,44 @@ function stripComments(command) {
  * is what separates printing a dangerous string from executing it.
  */
 function segments(command) {
-  const separator = /(\n|&&|\|\||;|(?<!\|)\|(?!\|))/g;
   const parts = [];
-  let last = 0;
-  let match;
-  while ((match = separator.exec(command)) !== null) {
-    parts.push({ text: command.slice(last, match.index), pipedInto: match[1] === '|' });
-    last = match.index + match[0].length;
+  let buffer = '';
+  let quote = null;
+
+  const cut = (pipedInto) => {
+    parts.push({ text: buffer, pipedInto });
+    buffer = '';
+  };
+
+  for (let i = 0; i < command.length; i++) {
+    const c = command[i];
+
+    if (quote) {
+      buffer += c;
+      if (c === quote && command[i - 1] !== '\\') quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      quote = c;
+      buffer += c;
+      continue;
+    }
+
+    if (c === '\n' || c === ';') {
+      cut(false);
+    } else if (c === '&' && command[i + 1] === '&') {
+      cut(false);
+      i++;
+    } else if (c === '|' && command[i + 1] === '|') {
+      cut(false);
+      i++;
+    } else if (c === '|') {
+      cut(true);
+    } else {
+      buffer += c;
+    }
   }
-  parts.push({ text: command.slice(last), pipedInto: false });
+  cut(false);
 
   return parts
     .map((part) => ({ text: part.text.replace(/\s+/g, ' ').trim(), pipedInto: part.pipedInto }))

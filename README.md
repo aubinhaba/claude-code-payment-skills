@@ -54,6 +54,11 @@ a rollback that names the part no rollback reaches. Every finding names a failur
 *"consider using a Money object"* is noise, *"a EUR refund against a USD capture passes this
 check"* is a finding.
 
+For a run shown whole rather than trimmed, with the diff that produced it:
+[`examples/consistency-review-fraud-scoring.md`](examples/consistency-review-fraud-scoring.md)
+— a fraud-scoring call added to a Spring Boot service, written so that everything visible
+in the diff is correct and the defect that remains is two files away.
+
 [![Validate](../../actions/workflows/validate.yml/badge.svg)](../../actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-black)

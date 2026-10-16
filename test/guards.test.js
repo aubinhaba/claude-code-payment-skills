@@ -103,6 +103,21 @@ describe('guard-destructive-commands', () => {
     assert.equal(bash('git commit -m "wip"; aws sqs purge-queue --queue-url u'), 'deny');
   });
 
+  test('a multi-line commit message is prose on every line, not only the first', () => {
+    const body = 'fix(guards): close a bypass' + NL + NL + '- terraform destroy slipped past rule one.';
+    assert.equal(bash('git commit -m "' + body + '"'), 'allow');
+    assert.equal(bash('git tag -a v1.1.0 -m "release' + NL + NL + '- drop table was denied"'), 'allow');
+  });
+
+  test('a separator inside a message is data, but one after it is not', () => {
+    assert.equal(bash('git commit -m "note; terraform destroy is forbidden"'), 'allow');
+    assert.equal(bash('git commit -m "a' + NL + NL + 'b" && terraform destroy'), 'deny');
+  });
+
+  test('an unterminated quote does not swallow the rest of the line', () => {
+    assert.equal(bash('git commit -m "oops && terraform destroy'), 'deny');
+  });
+
   test('apply is allowed from a reviewed plan and denied without one', () => {
     assert.equal(bash('terraform apply tfplan'), 'allow');
     assert.equal(bash('terraform apply -auto-approve'), 'deny');
